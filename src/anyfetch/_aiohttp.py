@@ -7,6 +7,7 @@ from anyfetch._models import (
     AsyncHTTPClient,
     AsyncWebSocketClient,
     AsyncWebSocketConnection,
+    Response,
 )
 
 if TYPE_CHECKING:
@@ -16,7 +17,6 @@ if TYPE_CHECKING:
 
     from anyfetch._models import (
         Request,
-        Response,
     )
 
 
@@ -31,10 +31,16 @@ class AiohttpClient(AsyncHTTPClient):
             headers=request.headers,
             data=request.content,
         ) as response:
+            if response.version is None:
+                http_version = ""
+            else:
+                major, minor = response.version
+                http_version = f"{major}.{minor}"
+
             return Response(
-                http_version=response.version,
+                http_version=http_version,
                 status_code=response.status,
-                reason_phrase=response.reason,
+                reason_phrase=response.reason or "",
                 headers=dict(response.headers),
                 content=await response.read(),
             )
@@ -55,8 +61,13 @@ class AiohttpWebSocketConnection(AsyncWebSocketConnection):
         self._websocket = websocket
 
     async def send(self, data: str | bytes) -> None:
-        await self._websocket.send_bytes(data) if isinstance(data, bytes) else await self._websocket.send_str(data)
+        await self._websocket.send_bytes(data) if isinstance(
+            data, bytes
+        ) else await self._websocket.send_str(data)
 
     async def receive(self) -> str | bytes:
         msg = await self._websocket.receive()
-        return msg.data if msg.type == aiohttp.WSMsgType.TEXT else msg.data
+        if isinstance(msg.data, str | bytes):
+            return msg.data
+
+        raise ValueError

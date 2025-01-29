@@ -24,7 +24,7 @@ class Urllib3Client(HTTPClient):
         return Response(
             http_version="1.1",
             status_code=response.status,
-            reason_phrase=response.reason,
+            reason_phrase=response.reason or "",
             headers=dict(response.headers),
             content=response.data,
         )

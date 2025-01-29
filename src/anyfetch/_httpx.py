@@ -3,6 +3,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING
 
+import httpx_ws
+import wsproto.events
+
 from anyfetch._models import (
     AsyncHTTPClient,
     AsyncWebSocketClient,
@@ -18,7 +21,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
     import httpx
-    import httpx_ws
 
 
 class HttpxClient(HTTPClient):
@@ -47,7 +49,7 @@ class HttpxWebSocketClient(WebSocketClient):
 
     @contextmanager
     def connect(self, url: str) -> Generator[HttpxWebSocketConnection]:
-        with self._client.ws_connect(url) as websocket:
+        with httpx_ws.connect_ws(url, self._client) as websocket:
             yield HttpxWebSocketConnection(websocket)
 
 
@@ -59,11 +61,14 @@ class HttpxWebSocketConnection(WebSocketConnection):
         if isinstance(data, bytes):
             self._session.send_bytes(data)
         else:
-            self._session.send_str(data)
+            self._session.send_text(data)
 
     def receive(self) -> str | bytes:
         msg = self._session.receive()
-        return msg.data if msg.type == httpx_ws.WSMsgType.TEXT else msg.data
+        if isinstance(msg, wsproto.events.TextMessage | wsproto.events.BytesMessage):
+            return msg.data
+
+        raise ValueError
 
 
 class AsyncHttpxClient(AsyncHTTPClient):
@@ -92,7 +97,7 @@ class AsyncHttpxWebSocketClient(AsyncWebSocketClient):
 
     @asynccontextmanager
     async def connect(self, url: str) -> AsyncGenerator[AsyncHttpxWebSocketConnection]:
-        async with self._client.ws_connect(url) as websocket:
+        async with httpx_ws.aconnect_ws(url, self._client) as websocket:
             yield AsyncHttpxWebSocketConnection(websocket)
 
 
@@ -104,8 +109,11 @@ class AsyncHttpxWebSocketConnection(AsyncWebSocketConnection):
         if isinstance(data, bytes):
             await self._session.send_bytes(data)
         else:
-            await self._session.send_str(data)
+            await self._session.send_text(data)
 
     async def receive(self) -> str | bytes:
         msg = await self._session.receive()
-        return msg.data if msg.type == httpx_ws.WSMsgType.TEXT else msg.data
+        if isinstance(msg, wsproto.events.TextMessage | wsproto.events.BytesMessage):
+            return msg.data
+
+        raise ValueError
