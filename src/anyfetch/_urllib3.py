@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from anyfetch._models import HTTPClient
+from anyfetch._models import HTTPClient, Response
 
 if TYPE_CHECKING:
     import urllib3
 
-    from anyfetch._models import Request, Response
+    from anyfetch._models import Request
 
 
 class Urllib3Client(HTTPClient):
@@ -15,4 +15,16 @@ class Urllib3Client(HTTPClient):
         self._pool = pool
 
     def request(self, request: Request) -> Response:
-        raise NotImplementedError
+        response = self._pool.request(
+            method=request.method,
+            url=request.url,
+            headers=request.headers,
+            body=request.content,
+        )
+        return Response(
+            http_version="1.1",
+            status_code=response.status,
+            reason_phrase=response.reason or "",
+            headers=dict(response.headers),
+            content=response.data,
+        )

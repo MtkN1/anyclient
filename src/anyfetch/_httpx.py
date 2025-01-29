@@ -3,6 +3,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING
 
+import httpx_ws
+import wsproto.events
+
 from anyfetch._models import (
     AsyncHTTPClient,
     AsyncWebSocketClient,
@@ -18,7 +21,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
     import httpx
-    import httpx_ws
 
 
 class HttpxClient(HTTPClient):
@@ -26,7 +28,19 @@ class HttpxClient(HTTPClient):
         self._client = client
 
     def request(self, request: Request) -> Response:
-        raise NotImplementedError
+        response = self._client.request(
+            method=request.method,
+            url=request.url,
+            headers=request.headers,
+            content=request.content,
+        )
+        return Response(
+            http_version=response.http_version,
+            status_code=response.status_code,
+            reason_phrase=response.reason_phrase,
+            headers=dict(response.headers),
+            content=response.content,
+        )
 
 
 class HttpxWebSocketClient(WebSocketClient):
@@ -34,8 +48,9 @@ class HttpxWebSocketClient(WebSocketClient):
         self._client = client
 
     @contextmanager
-    def connect(self, url: str) -> Generator[WebSocketConnection]:
-        raise NotImplementedError
+    def connect(self, url: str) -> Generator[HttpxWebSocketConnection]:
+        with httpx_ws.connect_ws(url, self._client) as websocket:
+            yield HttpxWebSocketConnection(websocket)
 
 
 class HttpxWebSocketConnection(WebSocketConnection):
@@ -43,10 +58,17 @@ class HttpxWebSocketConnection(WebSocketConnection):
         self._session = session
 
     def send(self, data: str | bytes) -> None:
-        raise NotImplementedError
+        if isinstance(data, bytes):
+            self._session.send_bytes(data)
+        else:
+            self._session.send_text(data)
 
     def receive(self) -> str | bytes:
-        raise NotImplementedError
+        msg = self._session.receive()
+        if isinstance(msg, wsproto.events.TextMessage | wsproto.events.BytesMessage):
+            return msg.data
+
+        raise ValueError
 
 
 class AsyncHttpxClient(AsyncHTTPClient):
@@ -54,7 +76,19 @@ class AsyncHttpxClient(AsyncHTTPClient):
         self._client = client
 
     async def request(self, request: Request) -> Response:
-        raise NotImplementedError
+        response = await self._client.request(
+            method=request.method,
+            url=request.url,
+            headers=request.headers,
+            content=request.content,
+        )
+        return Response(
+            http_version=response.http_version,
+            status_code=response.status_code,
+            reason_phrase=response.reason_phrase,
+            headers=dict(response.headers),
+            content=response.content,
+        )
 
 
 class AsyncHttpxWebSocketClient(AsyncWebSocketClient):
@@ -63,7 +97,8 @@ class AsyncHttpxWebSocketClient(AsyncWebSocketClient):
 
     @asynccontextmanager
     async def connect(self, url: str) -> AsyncGenerator[AsyncHttpxWebSocketConnection]:
-        raise NotImplementedError
+        async with httpx_ws.aconnect_ws(url, self._client) as websocket:
+            yield AsyncHttpxWebSocketConnection(websocket)
 
 
 class AsyncHttpxWebSocketConnection(AsyncWebSocketConnection):
@@ -71,7 +106,14 @@ class AsyncHttpxWebSocketConnection(AsyncWebSocketConnection):
         self._session = session
 
     async def send(self, data: str | bytes) -> None:
-        raise NotImplementedError
+        if isinstance(data, bytes):
+            await self._session.send_bytes(data)
+        else:
+            await self._session.send_text(data)
 
     async def receive(self) -> str | bytes:
-        raise NotImplementedError
+        msg = await self._session.receive()
+        if isinstance(msg, wsproto.events.TextMessage | wsproto.events.BytesMessage):
+            return msg.data
+
+        raise ValueError
