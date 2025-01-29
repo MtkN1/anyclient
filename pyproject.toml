@@ -7,7 +7,14 @@ authors = [
     { name = "MtkN1", email = "51289448+MtkN1@users.noreply.github.com" },
 ]
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "aiohttp>=3.11.11",
+    "anyio>=4.8.0",
+    "httpx>=0.28.1",
+    "httpx-ws>=0.7.1",
+    "typing-extensions>=4.12.2",
+    "urllib3>=2.3.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -60,6 +67,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101", # https://docs.astral.sh/ruff/rules/assert/
+    "PLR2004", # https://docs.astral.sh/ruff/rules/magic-value-comparison/
 ]
 
 [tool.pyright]
